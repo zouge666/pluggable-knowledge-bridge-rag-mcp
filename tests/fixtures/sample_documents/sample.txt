@@ -1,0 +1,11 @@
+# Sample Document
+
+This is a sample document for testing purposes.
+
+## Section 1
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+
+## Section 2
+
+Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
