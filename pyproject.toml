@@ -9,6 +9,9 @@ authors = [
     {name = "Developer", email = "dev@example.com"}
 ]
 keywords = ["rag", "mcp", "llm", "retrieval", "embedding"]
+dependencies = [
+    "pyyaml>=6.0",
+]
 
 [project.optional-dependencies]
 dev = [
