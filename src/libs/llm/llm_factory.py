@@ -6,11 +6,11 @@ LLM 工厂。
 
 from typing import TYPE_CHECKING, Optional
 
-from src.core.settings import LLMSettings, Settings
+from src.core.settings import LLMSettings, Settings, VisionLLMSettings
 from src.libs.llm.base_llm import BaseLLM, LLMError
 
 if TYPE_CHECKING:
-    pass
+    from src.libs.llm.base_vision_llm import BaseVisionLLM
 
 
 class LLMFactory:
@@ -99,6 +99,84 @@ class LLMFactory:
             )
 
     @classmethod
+    def create_vision_llm(
+        cls,
+        settings: Settings,
+    ) -> "BaseVisionLLM":
+        """
+        根据配置创建 Vision LLM 实例。
+
+        Args:
+            settings: 应用配置。
+
+        Returns:
+            BaseVisionLLM: Vision LLM 实例。
+
+        Raises:
+            LLMError: 不支持的 provider 或配置错误。
+        """
+        vision_settings = settings.vision_llm
+
+        # 如果未启用，抛出错误
+        if not vision_settings.enabled:
+            raise LLMError(
+                "Vision LLM is not enabled in settings",
+                provider="vision",
+            )
+
+        provider = vision_settings.provider.lower()
+
+        if provider == "azure":
+            from src.libs.llm.azure_vision_llm import AzureVisionLLM
+
+            return AzureVisionLLM(vision_settings)
+        elif provider == "openai":
+            from src.libs.llm.openai_vision_llm import OpenAIVisionLLM
+
+            return OpenAIVisionLLM(vision_settings)
+        else:
+            raise LLMError(
+                f"Unsupported Vision LLM provider: {provider}",
+                provider=provider,
+            )
+
+    @classmethod
+    def create_vision_llm_from_settings(
+        cls,
+        vision_settings: VisionLLMSettings,
+    ) -> "BaseVisionLLM":
+        """
+        从 VisionLLMSettings 创建 Vision LLM 实例。
+
+        Args:
+            vision_settings: Vision LLM 配置。
+
+        Returns:
+            BaseVisionLLM: Vision LLM 实例。
+        """
+        if not vision_settings.enabled:
+            raise LLMError(
+                "Vision LLM is not enabled in settings",
+                provider="vision",
+            )
+
+        provider = vision_settings.provider.lower()
+
+        if provider == "azure":
+            from src.libs.llm.azure_vision_llm import AzureVisionLLM
+
+            return AzureVisionLLM(vision_settings)
+        elif provider == "openai":
+            from src.libs.llm.openai_vision_llm import OpenAIVisionLLM
+
+            return OpenAIVisionLLM(vision_settings)
+        else:
+            raise LLMError(
+                f"Unsupported Vision LLM provider: {provider}",
+                provider=provider,
+            )
+
+    @classmethod
     def register(cls, provider: str, llm_class: type) -> None:
         """
         注册自定义 LLM provider。
@@ -113,3 +191,8 @@ class LLMFactory:
     def get_supported_providers(cls) -> list:
         """获取支持的 provider 列表。"""
         return ["azure", "openai", "ollama", "deepseek"]
+
+    @classmethod
+    def get_supported_vision_providers(cls) -> list:
+        """获取支持的 Vision LLM provider 列表。"""
+        return ["azure", "openai"]
