@@ -121,6 +121,15 @@ class TestRerankerFactory:
 
     def test_create_llm_reranker(self):
         """应该能创建 LLM Reranker。"""
+        from src.libs.llm.base_llm import BaseLLM, ChatResponse
+
+        # 创建 Fake LLM
+        class FakeLLM(BaseLLM):
+            def chat(self, messages, temperature=None, max_tokens=None, trace=None):
+                return ChatResponse(content="test", model="fake")
+            def get_model_name(self) -> str:
+                return "fake"
+
         settings = Settings(
             rerank=RerankSettings(
                 enabled=True,
@@ -128,10 +137,24 @@ class TestRerankerFactory:
             )
         )
 
-        reranker = RerankerFactory.create(settings)
+        reranker = RerankerFactory.create(settings, llm=FakeLLM())
 
         assert reranker is not None
         assert reranker.get_backend_name() == "llm"
+
+    def test_create_llm_reranker_without_llm_raises_error(self):
+        """没有 LLM 实例应该抛出错误。"""
+        settings = Settings(
+            rerank=RerankSettings(
+                enabled=True,
+                provider="llm",
+            )
+        )
+
+        with pytest.raises(RerankerError) as exc_info:
+            RerankerFactory.create(settings)
+
+        assert "LLM instance is required" in str(exc_info.value)
 
     def test_get_fallback(self):
         """应该能获取默认回退 Reranker。"""

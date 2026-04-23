@@ -4,14 +4,14 @@ Reranker 工厂。
 根据配置创建对应的 Reranker 实例。
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from src.core.settings import RerankSettings, Settings
 from src.libs.reranker.base_reranker import BaseReranker, RerankerError
 from src.libs.reranker.none_reranker import NoneReranker
 
 if TYPE_CHECKING:
-    pass
+    from src.libs.llm.base_llm import BaseLLM
 
 
 class RerankerFactory:
@@ -22,12 +22,17 @@ class RerankerFactory:
     """
 
     @classmethod
-    def create(cls, settings: Settings) -> BaseReranker:
+    def create(
+        cls,
+        settings: Settings,
+        llm: Optional["BaseLLM"] = None,
+    ) -> BaseReranker:
         """
         根据配置创建 Reranker 实例。
 
         Args:
             settings: 应用配置。
+            llm: LLM 实例（用于 LLM Reranker）。
 
         Returns:
             BaseReranker: Reranker 实例。
@@ -52,7 +57,12 @@ class RerankerFactory:
         elif provider == "llm":
             from src.libs.reranker.llm_reranker import LLMReranker
 
-            return LLMReranker(rerank_settings)
+            if llm is None:
+                raise RerankerError(
+                    "LLM instance is required for LLM Reranker",
+                    backend="llm",
+                )
+            return LLMReranker(llm=llm, settings=rerank_settings)
         else:
             raise RerankerError(
                 f"Unsupported Reranker provider: {provider}",
@@ -60,12 +70,17 @@ class RerankerFactory:
             )
 
     @classmethod
-    def create_from_settings(cls, rerank_settings: RerankSettings) -> BaseReranker:
+    def create_from_settings(
+        cls,
+        rerank_settings: RerankSettings,
+        llm: Optional["BaseLLM"] = None,
+    ) -> BaseReranker:
         """
         从 RerankSettings 创建 Reranker 实例。
 
         Args:
             rerank_settings: Rerank 配置。
+            llm: LLM 实例（用于 LLM Reranker）。
 
         Returns:
             BaseReranker: Reranker 实例。
@@ -84,7 +99,12 @@ class RerankerFactory:
         elif provider == "llm":
             from src.libs.reranker.llm_reranker import LLMReranker
 
-            return LLMReranker(rerank_settings)
+            if llm is None:
+                raise RerankerError(
+                    "LLM instance is required for LLM Reranker",
+                    backend="llm",
+                )
+            return LLMReranker(llm=llm, settings=rerank_settings)
         else:
             raise RerankerError(
                 f"Unsupported Reranker provider: {provider}",
