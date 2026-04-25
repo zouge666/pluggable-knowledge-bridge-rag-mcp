@@ -1,0 +1,52 @@
+{
+  "test_chunks": [
+    {
+      "id": "typical_noise_scenario",
+      "text": "--- Page 1 ---\n\nThis is the main content of the document.\n\n--- Page 1 ---\n\n\n\nThe actual text continues here with important information.",
+      "description": "综合噪声场景：页眉页脚、多余空白",
+      "expected_clean": "This is the main content of the document.\n\nThe actual text continues here with important information."
+    },
+    {
+      "id": "ocr_errors",
+      "text": "The quick brown f0x jumps over the lazy d0g. Th1s is an 0CR err0r example with s0me typ0s.",
+      "description": "OCR错误文本",
+      "expected_clean": "The quick brown fox jumps over the lazy dog. This is an OCR error example with some typos."
+    },
+    {
+      "id": "page_header_footer",
+      "text": "CONFIDENTIAL - Internal Use Only\n\nMain document content goes here.\n\nPage 1 of 10\n\n---\n\nCONFIDENTIAL - Internal Use Only\n\nMore content on page 2.\n\nPage 2 of 10",
+      "description": "页眉页脚模式",
+      "expected_clean": "Main document content goes here.\n\nMore content on page 2."
+    },
+    {
+      "id": "excessive_whitespace",
+      "text": "This    text    has    too    many    spaces.\n\n\n\n\nAnd    multiple    blank    lines.",
+      "description": "多余空白",
+      "expected_clean": "This text has too many spaces.\n\nAnd multiple blank lines."
+    },
+    {
+      "id": "format_markers",
+      "text": "<!-- HTML comment -->\n<div class=\"content\">\n  <p>Some HTML content here.</p>\n</div>\n\n```python\ndef code_block():\n    # This should be preserved\n    return True\n```",
+      "description": "HTML/Markdown标记",
+      "expected_clean": "Some HTML content here.\n\n```python\ndef code_block():\n    # This should be preserved\n    return True\n```"
+    },
+    {
+      "id": "clean_text",
+      "text": "This is clean text without any noise.\n\nIt has proper formatting and no issues.\n\nThe content should remain unchanged.",
+      "description": "干净文本（验证不过度清理）",
+      "expected_clean": "This is clean text without any noise.\n\nIt has proper formatting and no issues.\n\nThe content should remain unchanged."
+    },
+    {
+      "id": "code_blocks",
+      "text": "Here is some code:\n\n```python\ndef hello_world():\n    print(\"Hello, World!\")\n    \n    if True:\n        return 42\n```\n\nThe code above prints a greeting.",
+      "description": "代码块（验证保留内部格式）",
+      "expected_clean": "Here is some code:\n\n```python\ndef hello_world():\n    print(\"Hello, World!\")\n    \n    if True:\n        return 42\n```\n\nThe code above prints a greeting."
+    },
+    {
+      "id": "mixed_noise",
+      "text": "--- Page 1 ---\n\n\n  <p>This is a real document with mixed content.</p>\n\n\n\n--- Page 1 ---\n\n\nThe    text    has    various    issues.\n\nPage 1 of 5",
+      "description": "真实混合场景",
+      "expected_clean": "This is a real document with mixed content.\n\nThe text has various issues."
+    }
+  ]
+}
