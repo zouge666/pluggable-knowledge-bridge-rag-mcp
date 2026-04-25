@@ -15,6 +15,11 @@ from src.ingestion.storage.vector_upserter import (
     VectorUpserter,
     FakeVectorUpserter,
 )
+from src.ingestion.storage.image_storage import (
+    ImageStorage,
+    FakeImageStorage,
+    ImageInfo,
+)
 
 __all__ = [
     # BM25
@@ -26,4 +31,8 @@ __all__ = [
     # Vector
     "VectorUpserter",
     "FakeVectorUpserter",
+    # Image
+    "ImageStorage",
+    "FakeImageStorage",
+    "ImageInfo",
 ]
