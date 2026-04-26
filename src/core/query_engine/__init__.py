@@ -27,6 +27,10 @@ from src.core.query_engine.hybrid_search import (
     HybridSearch,
     FakeHybridSearch,
 )
+from src.core.query_engine.reranker import (
+    QueryReranker,
+    FakeQueryReranker,
+)
 
 __all__ = [
     "QueryProcessor",
@@ -42,4 +46,6 @@ __all__ = [
     "FusionResult",
     "HybridSearch",
     "FakeHybridSearch",
+    "QueryReranker",
+    "FakeQueryReranker",
 ]

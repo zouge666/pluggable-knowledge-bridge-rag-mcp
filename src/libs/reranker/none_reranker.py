@@ -50,7 +50,11 @@ class NoneReranker(BaseReranker):
         start_time = time.time()
 
         # 不做任何排序，直接返回原始顺序
-        result_candidates = candidates[:top_k] if top_k else candidates
+        # 注意：top_k=0 时应返回空列表，而不是全部候选
+        if top_k is not None:
+            result_candidates = candidates[:top_k]
+        else:
+            result_candidates = candidates
 
         elapsed_ms = (time.time() - start_time) * 1000
 
