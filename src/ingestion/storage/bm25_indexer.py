@@ -420,6 +420,73 @@ class BM25Indexer:
 
         self._index = None
 
+    def remove_document(self, chunk_id: str) -> bool:
+        """
+        从索引中移除文档。
+
+        Args:
+            chunk_id: 文档 ID。
+
+        Returns:
+            bool: 是否成功移除。
+        """
+        conn = sqlite3.connect(self._db_path)
+        cursor = conn.cursor()
+
+        # 从 doc_lengths 表删除
+        cursor.execute("DELETE FROM doc_lengths WHERE chunk_id = ?", (chunk_id,))
+
+        # 从倒排索引中移除该文档
+        cursor.execute("SELECT term, postings FROM inverted_index")
+        rows = cursor.fetchall()
+
+        removed = False
+        for term, postings_json in rows:
+            postings = json.loads(postings_json)
+            original_len = len(postings)
+            postings = [p for p in postings if p["chunk_id"] != chunk_id]
+
+            if len(postings) < original_len:
+                removed = True
+                if postings:
+                    cursor.execute(
+                        "UPDATE inverted_index SET postings = ? WHERE term = ?",
+                        (json.dumps(postings), term),
+                    )
+                else:
+                    cursor.execute("DELETE FROM inverted_index WHERE term = ?", (term,))
+
+        conn.commit()
+        conn.close()
+
+        # 更新内存索引
+        if self._index is not None:
+            self._index.chunk_ids.discard(chunk_id)
+            if chunk_id in self._index.doc_lengths:
+                del self._index.doc_lengths[chunk_id]
+            for term, term_index in list(self._index.terms.items()):
+                term_index.postings = [p for p in term_index.postings if p.chunk_id != chunk_id]
+                if not term_index.postings:
+                    del self._index.terms[term]
+
+        return removed
+
+    def remove_documents(self, chunk_ids: List[str]) -> int:
+        """
+        批量移除文档。
+
+        Args:
+            chunk_ids: 文档 ID 列表。
+
+        Returns:
+            int: 成功移除的文档数量。
+        """
+        count = 0
+        for chunk_id in chunk_ids:
+            if self.remove_document(chunk_id):
+                count += 1
+        return count
+
 
 class FakeBM25Indexer:
     """
@@ -555,3 +622,30 @@ class FakeBM25Indexer:
             "total_terms": len(self._index.terms),
             "avg_doc_length": self._index.avg_doc_length,
         }
+
+    def remove_document(self, chunk_id: str) -> bool:
+        """从索引中移除文档。"""
+        if self._index is None:
+            return False
+
+        if chunk_id not in self._index.chunk_ids:
+            return False
+
+        self._index.chunk_ids.discard(chunk_id)
+        if chunk_id in self._index.doc_lengths:
+            del self._index.doc_lengths[chunk_id]
+
+        for term, term_index in list(self._index.terms.items()):
+            term_index.postings = [p for p in term_index.postings if p.chunk_id != chunk_id]
+            if not term_index.postings:
+                del self._index.terms[term]
+
+        return True
+
+    def remove_documents(self, chunk_ids: List[str]) -> int:
+        """批量移除文档。"""
+        count = 0
+        for chunk_id in chunk_ids:
+            if self.remove_document(chunk_id):
+                count += 1
+        return count

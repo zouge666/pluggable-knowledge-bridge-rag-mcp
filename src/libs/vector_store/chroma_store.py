@@ -217,6 +217,54 @@ class ChromaStore(BaseVectorStore):
                 original_error=e,
             )
 
+    def get_by_metadata(self, filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """根据元数据条件获取记录。
+
+        Args:
+            filters: 元数据过滤条件。
+
+        Returns:
+            List[Dict[str, Any]]: 匹配的记录列表。
+        """
+        collection = self._get_collection()
+
+        try:
+            results = collection.get(
+                where=filters,
+                include=["documents", "metadatas"],
+            )
+
+            records = []
+            if results and results["ids"]:
+                docs = results["documents"] or []
+                metas = results["metadatas"] or []
+
+                for i, id_ in enumerate(results["ids"]):
+                    records.append({
+                        "id": id_,
+                        "text": docs[i] if i < len(docs) else "",
+                        "metadata": metas[i] if i < len(metas) else {},
+                    })
+
+            return records
+        except Exception as e:
+            raise VectorStoreConfigError(
+                str(e),
+                backend="chroma",
+                original_error=e,
+            )
+
+    def query_by_metadata(self, filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """根据元数据条件查询记录（别名方法）。
+
+        Args:
+            filters: 元数据过滤条件。
+
+        Returns:
+            List[Dict[str, Any]]: 匹配的记录列表。
+        """
+        return self.get_by_metadata(filters)
+
     def get_collection_stats(self) -> Dict[str, Any]:
         """获取集合统计信息。"""
         collection = self._get_collection()
