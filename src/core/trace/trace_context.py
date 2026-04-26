@@ -4,6 +4,7 @@
 用于记录请求各阶段的处理数据。
 """
 
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -22,6 +23,9 @@ class TraceContext:
     trace_type: str = "query"  # "query" | "ingestion"
     started_at: str = field(default_factory=lambda: datetime.now().isoformat())
     stages: List[Dict[str, Any]] = field(default_factory=list)
+    _start_time: float = field(default_factory=time.perf_counter, repr=False)
+    _finished: bool = False
+    _finish_time: Optional[float] = None
 
     def record_stage(
         self,
@@ -57,8 +61,35 @@ class TraceContext:
         self.stages.append(stage)
 
     def finish(self) -> None:
-        """标记追踪结束。"""
-        self.finished_at = datetime.now().isoformat()
+        """标记追踪结束，计算总耗时。"""
+        if not self._finished:
+            self._finish_time = time.perf_counter()
+            self.finished_at = datetime.now().isoformat()
+            self._finished = True
+
+    def elapsed_ms(self, stage_name: Optional[str] = None) -> float:
+        """
+        获取指定阶段或总耗时。
+
+        Args:
+            stage_name: 阶段名称。如果为 None，返回总耗时。
+
+        Returns:
+            耗时（毫秒）。
+        """
+        if stage_name is not None:
+            # 查找指定阶段的耗时
+            for stage in self.stages:
+                if stage.get("stage") == stage_name:
+                    return stage.get("elapsed_ms", 0.0)
+            return 0.0
+
+        # 返回总耗时
+        if self._finished and self._finish_time is not None:
+            return (self._finish_time - self._start_time) * 1000
+
+        # 如果未 finish，返回当前耗时
+        return (time.perf_counter() - self._start_time) * 1000
 
     def to_dict(self) -> Dict[str, Any]:
         """序列化为字典。"""
@@ -68,6 +99,9 @@ class TraceContext:
             "started_at": self.started_at,
             "stages": self.stages,
         }
-        if hasattr(self, "finished_at"):
+
+        if self._finished and hasattr(self, "finished_at"):
             result["finished_at"] = self.finished_at
+            result["total_elapsed_ms"] = round(self.elapsed_ms(), 2)
+
         return result

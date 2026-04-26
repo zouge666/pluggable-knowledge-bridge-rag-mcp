@@ -5,6 +5,7 @@ MCP Tool 实现：查询知识库。
 """
 
 import logging
+import time
 from typing import Any, Dict, List, Optional
 
 from src.core.settings import Settings
@@ -17,6 +18,7 @@ from src.core.query_engine import (
     QueryReranker,
 )
 from src.core.response import ResponseBuilder
+from src.core.trace import TraceContext, get_trace_collector
 from src.core.types import RetrievalResult
 from src.libs.embedding import EmbeddingFactory
 from src.libs.vector_store import VectorStoreFactory
@@ -108,6 +110,7 @@ class QueryKnowledgeHubTool:
         top_k: int = 10,
         collection: Optional[str] = None,
         no_rerank: bool = False,
+        trace: Optional[TraceContext] = None,
     ) -> Dict[str, Any]:
         """
         执行查询。
@@ -117,13 +120,18 @@ class QueryKnowledgeHubTool:
             top_k: 返回结果数量。
             collection: 集合名称（可选）。
             no_rerank: 是否跳过重排序。
+            trace: 追踪上下文（可选，用于外部传入）。
 
         Returns:
             MCP 格式响应。
         """
         self._lazy_init()
 
-        logger.info(f"Executing query: {query[:50]}... (top_k={top_k}, collection={collection})")
+        # 创建 TraceContext（如果外部未传入）
+        if trace is None:
+            trace = TraceContext(trace_type="query")
+
+        logger.info(f"Executing query: {query[:50]}... (top_k={top_k}, collection={collection}, trace_id={trace.trace_id})")
 
         try:
             # 构建过滤器
@@ -136,17 +144,21 @@ class QueryKnowledgeHubTool:
                 query=query,
                 top_k=top_k * 2,  # 召回更多，供 rerank 筛选
                 filters=filters,
+                trace=trace,
             )
 
             logger.info(f"Hybrid search returned {len(results)} results")
 
             # 重排序
+            rerank_backend = "none"
             if not no_rerank and results:
                 rerank_result = self._reranker.rerank(
                     query=query,
                     results=results,
                     top_k=top_k,
+                    trace=trace,
                 )
+                rerank_backend = rerank_result.backend
 
                 # 转换回 RetrievalResult
                 original_map = {r.chunk_id: r for r in results}
@@ -163,7 +175,7 @@ class QueryKnowledgeHubTool:
                             )
                         )
 
-                logger.info(f"Reranked to {len(final_results)} results (backend: {rerank_result.backend})")
+                logger.info(f"Reranked to {len(final_results)} results (backend: {rerank_backend})")
             else:
                 final_results = results[:top_k]
 
@@ -173,10 +185,47 @@ class QueryKnowledgeHubTool:
                 query=query,
             )
 
+            # 记录响应构建阶段
+            trace.record_stage(
+                stage_name="response_building",
+                elapsed_ms=0.1,  # 响应构建通常很快
+                method="markdown",
+                details={
+                    "result_count": len(final_results),
+                    "has_citations": True,
+                },
+            )
+
+            # Finish trace
+            trace.finish()
+
+            # Collect trace
+            collector = get_trace_collector()
+            collector.collect(trace)
+
+            logger.info(f"Query completed in {trace.elapsed_ms():.2f}ms (trace_id={trace.trace_id})")
+
             return response
 
         except Exception as e:
             logger.error(f"Query failed: {e}")
+
+            # 记录错误到 trace
+            trace.record_stage(
+                stage_name="error",
+                elapsed_ms=0,
+                method="exception",
+                details={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
+            )
+            trace.finish()
+
+            # Collect trace even on error
+            collector = get_trace_collector()
+            collector.collect(trace)
+
             return {
                 "content": [
                     {
@@ -187,6 +236,7 @@ class QueryKnowledgeHubTool:
                 "structuredContent": {
                     "error": str(e),
                     "query": query,
+                    "trace_id": trace.trace_id,
                 },
             }
 

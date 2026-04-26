@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Callable, List, Optional, Union
 
 from src.core.settings import Settings
-from src.core.trace.trace_context import TraceContext
+from src.core.trace import TraceContext, get_trace_collector
 from src.core.types import Chunk, ChunkRecord, Document
 from src.ingestion.chunking import DocumentChunker
 from src.ingestion.embedding.batch_processor import BatchProcessor
@@ -121,14 +121,17 @@ class IngestionPipeline:
             file_path: 文件路径。
             collection: 集合名称。
             force: 强制重新处理（忽略完整性检查）。
-            trace: 追踪上下文。
+            trace: 追踪上下文（可选，用于外部传入）。
 
         Returns:
             PipelineResult: 执行结果。
         """
         start_time = time.time()
         file_path = Path(file_path)
-        stages = []
+
+        # 创建 TraceContext（如果外部未传入）
+        if trace is None:
+            trace = TraceContext(trace_type="ingestion")
 
         # 1. Integrity Check
         stage_start = time.time()
@@ -136,6 +139,16 @@ class IngestionPipeline:
 
         if not force and self._integrity_checker.should_skip(doc_hash):
             elapsed_ms = (time.time() - start_time) * 1000
+            trace.record_stage(
+                stage_name="integrity_check",
+                elapsed_ms=elapsed_ms,
+                method="skip",
+                details={"action": "skipped", "doc_hash": doc_hash},
+            )
+            trace.finish()
+            collector = get_trace_collector()
+            collector.collect(trace)
+
             return PipelineResult(
                 success=True,
                 doc_hash=doc_hash,
@@ -146,60 +159,68 @@ class IngestionPipeline:
                 stages=[{"stage": "integrity_check", "action": "skipped"}],
             )
 
-        stages.append({
-            "stage": "integrity_check",
-            "elapsed_ms": (time.time() - stage_start) * 1000,
-        })
+        trace.record_stage(
+            stage_name="integrity_check",
+            elapsed_ms=(time.time() - stage_start) * 1000,
+            method="sha256",
+            details={"doc_hash": doc_hash},
+        )
         self._report_progress("integrity_check", 1, 6)
 
         try:
             # 2. Load
             stage_start = time.time()
             document = self._loader.load(file_path, collection, trace)
-            stages.append({
-                "stage": "load",
-                "elapsed_ms": (time.time() - stage_start) * 1000,
-                "details": {"doc_id": document.id},
-            })
+            trace.record_stage(
+                stage_name="load",
+                elapsed_ms=(time.time() - stage_start) * 1000,
+                method="pdf",
+                details={"doc_id": document.id, "has_images": bool(document.get_images())},
+            )
             self._report_progress("load", 2, 6)
 
             # 3. Split
             stage_start = time.time()
             chunks = self._chunker.split_document(document, trace)
-            stages.append({
-                "stage": "split",
-                "elapsed_ms": (time.time() - stage_start) * 1000,
-                "details": {"chunks_count": len(chunks)},
-            })
+            trace.record_stage(
+                stage_name="split",
+                elapsed_ms=(time.time() - stage_start) * 1000,
+                method="recursive",
+                details={"chunks_count": len(chunks)},
+            )
             self._report_progress("split", 3, 6)
 
             # 4. Transform
             stage_start = time.time()
             chunks = self._transform_chunks(chunks, document, trace)
-            stages.append({
-                "stage": "transform",
-                "elapsed_ms": (time.time() - stage_start) * 1000,
-                "details": {"chunks_count": len(chunks)},
-            })
+            trace.record_stage(
+                stage_name="transform",
+                elapsed_ms=(time.time() - stage_start) * 1000,
+                method="refine+caption",
+                details={"chunks_count": len(chunks)},
+            )
             self._report_progress("transform", 4, 6)
 
             # 5. Encode
             stage_start = time.time()
             records = self._encode_chunks(chunks, trace)
-            stages.append({
-                "stage": "encode",
-                "elapsed_ms": (time.time() - stage_start) * 1000,
-                "details": {"records_count": len(records)},
-            })
+            trace.record_stage(
+                stage_name="encode",
+                elapsed_ms=(time.time() - stage_start) * 1000,
+                method="dense+sparse",
+                details={"records_count": len(records)},
+            )
             self._report_progress("encode", 5, 6)
 
             # 6. Store
             stage_start = time.time()
             self._store_records(records, collection, doc_hash, trace)
-            stages.append({
-                "stage": "store",
-                "elapsed_ms": (time.time() - stage_start) * 1000,
-            })
+            trace.record_stage(
+                stage_name="store",
+                elapsed_ms=(time.time() - stage_start) * 1000,
+                method="chroma+bm25",
+                details={"collection": collection},
+            )
             self._report_progress("store", 6, 6)
 
             # 标记成功
@@ -215,6 +236,11 @@ class IngestionPipeline:
 
             elapsed_ms = (time.time() - start_time) * 1000
 
+            # Finish and collect trace
+            trace.finish()
+            collector = get_trace_collector()
+            collector.collect(trace)
+
             return PipelineResult(
                 success=True,
                 doc_hash=doc_hash,
@@ -223,14 +249,31 @@ class IngestionPipeline:
                 chunks_count=len(chunks),
                 images_count=images_count,
                 elapsed_ms=elapsed_ms,
-                stages=stages,
+                stages=[s for s in trace.stages],
             )
 
         except Exception as e:
+            # 记录错误到 trace
+            trace.record_stage(
+                stage_name="error",
+                elapsed_ms=0,
+                method="exception",
+                details={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
+            )
+
             # 标记失败
             self._integrity_checker.mark_failed(doc_hash, str(e))
 
             elapsed_ms = (time.time() - start_time) * 1000
+
+            # Finish and collect trace
+            trace.finish()
+            collector = get_trace_collector()
+            collector.collect(trace)
+
             return PipelineResult(
                 success=False,
                 doc_hash=doc_hash,
@@ -238,7 +281,7 @@ class IngestionPipeline:
                 collection=collection,
                 elapsed_ms=elapsed_ms,
                 error=str(e),
-                stages=stages,
+                stages=[s for s in trace.stages],
             )
 
     def _transform_chunks(

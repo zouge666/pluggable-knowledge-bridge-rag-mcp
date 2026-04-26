@@ -5,5 +5,15 @@
 """
 
 from src.core.trace.trace_context import TraceContext
+from src.core.trace.trace_collector import (
+    TraceCollector,
+    get_trace_collector,
+    set_trace_collector,
+)
 
-__all__ = ["TraceContext"]
+__all__ = [
+    "TraceContext",
+    "TraceCollector",
+    "get_trace_collector",
+    "set_trace_collector",
+]
