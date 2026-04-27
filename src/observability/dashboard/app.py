@@ -4,6 +4,14 @@ Main Streamlit Dashboard application.
 Multi-page navigation architecture for the RAG Knowledge Hub.
 """
 
+import sys
+from pathlib import Path
+
+# 确保项目根目录在 Python 路径中
+project_root = Path(__file__).parent.parent.parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 import streamlit as st
 
 from src.observability.dashboard.pages.overview import render_overview_page
@@ -11,6 +19,7 @@ from src.observability.dashboard.pages.data_browser import render_data_browser_p
 from src.observability.dashboard.pages.ingestion_manager import render_ingestion_manager_page as render_ingestion_manager_page_real
 from src.observability.dashboard.pages.ingestion_traces import render_ingestion_tracing_page as render_ingestion_tracing_page_real
 from src.observability.dashboard.pages.query_traces import render_query_tracing_page as render_query_tracing_page_real
+from src.observability.dashboard.pages.evaluation_panel import render_evaluation_panel_page
 
 
 def render_placeholder_page(page_name: str) -> None:
@@ -68,8 +77,8 @@ def render_query_tracing_page() -> None:
 
 
 def render_evaluation_page() -> None:
-    """Render the evaluation page (placeholder)."""
-    render_placeholder_page("Evaluation")
+    """Render the evaluation page."""
+    render_evaluation_panel_page()
 
 
 def main() -> None:

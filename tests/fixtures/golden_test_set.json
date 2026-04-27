@@ -1,0 +1,52 @@
+{
+  "name": "knowledge_hub_golden_set",
+  "version": "1.0",
+  "description": "黄金测试集用于评估 RAG 检索质量。包含常见查询场景。",
+  "test_cases": [
+    {
+      "query": "如何配置 Azure OpenAI？",
+      "expected_chunk_ids": [],
+      "expected_sources": ["config_guide.pdf"],
+      "metadata": {
+        "category": "configuration",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "query": "系统架构是什么样的？",
+      "expected_chunk_ids": [],
+      "expected_sources": ["architecture.pdf"],
+      "metadata": {
+        "category": "architecture",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "query": "如何实现混合检索？",
+      "expected_chunk_ids": [],
+      "expected_sources": [],
+      "metadata": {
+        "category": "implementation",
+        "difficulty": "hard"
+      }
+    },
+    {
+      "query": "什么是 RRF 融合算法？",
+      "expected_chunk_ids": [],
+      "expected_sources": [],
+      "metadata": {
+        "category": "algorithm",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "query": "如何处理 PDF 文档中的图片？",
+      "expected_chunk_ids": [],
+      "expected_sources": [],
+      "metadata": {
+        "category": "multimodal",
+        "difficulty": "medium"
+      }
+    }
+  ]
+}
