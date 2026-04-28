@@ -119,9 +119,7 @@ class TestPdfLoaderWithMock:
         pdf_path = tmp_path / "test.pdf"
         pdf_path.write_bytes(b"fake pdf content")
 
-        loader = PdfLoader(extract_images=False)
-
-        # Mock PyMuPDF
+        # Mock PyMuPDF at module level before creating loader
         with patch("src.libs.loader.pdf_loader.HAS_PYMUPDF", True):
             with patch("src.libs.loader.pdf_loader.HAS_MARKITDOWN", False):
                 with patch("src.libs.loader.pdf_loader.fitz") as mock_fitz:
@@ -129,9 +127,13 @@ class TestPdfLoaderWithMock:
                     mock_doc = MagicMock()
                     mock_page = MagicMock()
                     mock_page.get_text.return_value = "Mock PDF text content"
+                    mock_page.get_images.return_value = []
                     mock_doc.__iter__ = MagicMock(return_value=iter([mock_page]))
                     mock_doc.close = MagicMock()
                     mock_fitz.open.return_value = mock_doc
+
+                    # 创建 loader（此时 use_markitdown=False 因为 HAS_MARKITDOWN=False）
+                    loader = PdfLoader(extract_images=False)
 
                     # 加载文档
                     doc = loader.load(pdf_path, collection="test")
@@ -272,10 +274,11 @@ class TestNoParserAvailable:
         pdf_path = tmp_path / "test.pdf"
         pdf_path.write_bytes(b"fake pdf")
 
-        loader = PdfLoader()
-
+        # Patch at module level before creating loader
         with patch("src.libs.loader.pdf_loader.HAS_PYMUPDF", False):
             with patch("src.libs.loader.pdf_loader.HAS_MARKITDOWN", False):
+                # Create loader after patching
+                loader = PdfLoader()
                 with pytest.raises(ParsingError) as exc_info:
                     loader.load(pdf_path)
 
