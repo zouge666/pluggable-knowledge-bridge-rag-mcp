@@ -212,12 +212,17 @@ class ProtocolHandler:
         # 执行 tool
         result = handler(arguments)
 
+        # If handler already returns MCP-formatted payload, pass through.
+        if isinstance(result, dict) and "content" in result:
+            return result
+
         # 包装为 MCP content 格式
+        text = result if isinstance(result, str) else str(result)
         return {
             "content": [
                 {
                     "type": "text",
-                    "text": result if isinstance(result, str) else str(result),
+                    "text": text,
                 }
             ],
         }

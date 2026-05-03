@@ -12,6 +12,7 @@ from typing import List, Optional
 from src.core.settings import Settings
 from src.core.trace.trace_context import TraceContext
 from src.core.types import Chunk, Document, ImageRef
+from src.libs.splitter.base_splitter import SplitResult
 from src.libs.splitter import SplitterFactory
 
 
@@ -61,7 +62,12 @@ class DocumentChunker:
         start_time = time.time()
 
         # 使用 libs.splitter 进行纯文本切分
-        text_chunks = self._splitter.split_text(document.text)
+        split_output = self._splitter.split_text(document.text)
+        if isinstance(split_output, SplitResult):
+            text_chunks = split_output.chunks
+        else:
+            # Backward compatibility for legacy/mocked splitters returning List[str].
+            text_chunks = split_output
 
         # 获取文档级图片列表
         doc_images = document.get_images()
@@ -95,10 +101,12 @@ class DocumentChunker:
 
         # 记录追踪
         if trace:
+            splitter_method = getattr(self._splitter, "get_splitter_type", None)
+            method_name = splitter_method() if callable(splitter_method) else "unknown"
             trace.record_stage(
                 stage_name="document_chunking",
                 elapsed_ms=elapsed_ms,
-                method=self._splitter.get_backend_name(),
+                method=method_name,
                 details={
                     "doc_id": document.id,
                     "chunk_count": len(chunks),

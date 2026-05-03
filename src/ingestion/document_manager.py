@@ -8,6 +8,7 @@ Document Manager - 跨存储的文档生命周期管理。
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from pathlib import Path
 
 from src.libs.vector_store.chroma_store import ChromaStore
 from src.ingestion.storage.bm25_indexer import BM25Indexer
@@ -164,10 +165,28 @@ class DocumentManager:
             int: chunk 数量。
         """
         try:
-            # 使用 metadata 过滤查询
-            filters = {"source": source_path}
+            # Primary: 尝试使用完整的 source_path (+ collection if provided)
+            if collection:
+                filters = {"$and": [{"source_path": source_path}, {"collection": collection}]}
+            else:
+                filters = {"source_path": source_path}
+
             results = self._chroma.query_by_metadata(filters)
-            return len(results)
+
+            # Backward compatibility: 如果没有结果，先尝试去掉 collection 限制
+            if not results and collection:
+                results = self._chroma.query_by_metadata({"source_path": source_path})
+
+            # Fallback 1: 尝试按文件名匹配（有些存储只记录 file_name）
+            if not results:
+                file_name = Path(source_path).name
+                results = self._chroma.query_by_metadata({"file_name": file_name})
+
+            # Fallback 2: 尝试常见替代字段 'source'
+            if not results:
+                results = self._chroma.query_by_metadata({"source": source_path})
+
+            return len(results) if results else 0
         except Exception:
             return 0
 
@@ -231,8 +250,30 @@ class DocumentManager:
             List[ChunkDetail]: chunk 详情列表。
         """
         try:
-            filters = {"source": source_path}
+            # Primary: 使用完整的 source_path (+ collection if provided)
+            if collection:
+                filters = {"$and": [{"source_path": source_path}, {"collection": collection}]}
+            else:
+                filters = {"source_path": source_path}
+
             results = self._chroma.get_by_metadata(filters)
+
+            # Backward compatibility: 去掉 collection 限制再试一次
+            if not results and collection:
+                results = self._chroma.get_by_metadata({"source_path": source_path})
+
+            # Fallback 1: 按 file_name 查找
+            if not results:
+                file_name = Path(source_path).name
+                results = self._chroma.get_by_metadata({"file_name": file_name})
+
+            # Fallback 2: 常见替代字段 'source'
+            if not results:
+                results = self._chroma.get_by_metadata({"source": source_path})
+
+            if not results:
+                return []
+
             return [
                 ChunkDetail(
                     chunk_id=r["id"],

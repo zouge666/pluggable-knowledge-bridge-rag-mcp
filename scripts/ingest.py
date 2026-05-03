@@ -18,7 +18,7 @@ project_root = Path(__file__).parent.parent.resolve()
 sys.path.insert(0, str(project_root))
 sys.path.insert(0, str(project_root / "src"))
 
-from src.core.settings import Settings
+from src.core.settings import load_settings
 from src.ingestion.pipeline import IngestionPipeline, PipelineResult
 
 
@@ -117,7 +117,7 @@ Examples:
     print()
 
     # Create pipeline
-    settings = Settings()
+    settings = load_settings()
     pipeline = IngestionPipeline(settings=settings)
 
     # Process files

@@ -14,9 +14,14 @@ from src.libs.splitter.base_splitter import (
 )
 
 try:
-    from langchain.text_splitter import RecursiveCharacterTextSplitter
+    # LangChain 0.2+ / 1.x: splitters are in a dedicated package.
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
 except ImportError:
-    RecursiveCharacterTextSplitter = None
+    try:
+        # Older LangChain releases exposed splitters from langchain directly.
+        from langchain.text_splitter import RecursiveCharacterTextSplitter
+    except ImportError:
+        RecursiveCharacterTextSplitter = None
 
 
 # Markdown 优化的分隔符层级
@@ -71,7 +76,8 @@ class RecursiveSplitter(BaseSplitter):
         if self._splitter is None:
             if RecursiveCharacterTextSplitter is None:
                 raise ImportError(
-                    "langchain package is required. Install it with: pip install langchain"
+                    "Recursive splitter requires langchain_text_splitters (or legacy langchain). "
+                    "Install with: python -m pip install langchain-text-splitters"
                 )
             self._splitter = RecursiveCharacterTextSplitter(
                 chunk_size=self._chunk_size,

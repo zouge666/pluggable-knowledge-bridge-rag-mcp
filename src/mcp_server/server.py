@@ -12,7 +12,16 @@ import sys
 import logging
 from typing import Any, Dict, Optional
 
+from src.core.settings import Settings
 from src.mcp_server.protocol_handler import ProtocolHandler
+from src.mcp_server.tools import (
+    QueryKnowledgeHubTool,
+    create_query_handler,
+    ListCollectionsTool,
+    create_list_collections_handler,
+    GetDocumentSummaryTool,
+    create_get_document_summary_handler,
+)
 
 # 配置日志到 stderr（stdout 只用于 MCP 消息）
 logger = logging.getLogger("mcp_server")
@@ -38,11 +47,46 @@ class MCPServer:
     4. 日志输出到 stderr
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        settings: Optional[Settings] = None,
+        register_default_tools: bool = False,
+    ):
         """初始化 MCP Server。"""
+        self._settings = settings
         self.protocol_handler = ProtocolHandler()
         self.running = True
+
+        if register_default_tools:
+            self._register_default_tools()
+
         logger.info("MCP Server initialized")
+
+    def _register_default_tools(self):
+        """注册内置 MCP tools。"""
+        query_tool = QueryKnowledgeHubTool()
+        self.protocol_handler.register_tool(
+            name=query_tool.get_schema()["name"],
+            description=query_tool.get_schema()["description"],
+            input_schema=query_tool.get_schema()["inputSchema"],
+            handler=create_query_handler(settings=self._settings),
+        )
+
+        collections_tool = ListCollectionsTool()
+        self.protocol_handler.register_tool(
+            name=collections_tool.get_schema()["name"],
+            description=collections_tool.get_schema()["description"],
+            input_schema=collections_tool.get_schema()["inputSchema"],
+            handler=create_list_collections_handler(settings=self._settings),
+        )
+
+        summary_tool = GetDocumentSummaryTool()
+        self.protocol_handler.register_tool(
+            name=summary_tool.get_schema()["name"],
+            description=summary_tool.get_schema()["description"],
+            input_schema=summary_tool.get_schema()["inputSchema"],
+            handler=create_get_document_summary_handler(settings=self._settings),
+        )
 
     def run(self):
         """
@@ -141,7 +185,7 @@ class MCPServer:
 
 def main():
     """MCP Server 主入口。"""
-    server = MCPServer()
+    server = MCPServer(register_default_tools=True)
     server.run()
 
 

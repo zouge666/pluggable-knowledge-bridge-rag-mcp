@@ -82,25 +82,24 @@ def _run_ingestion(uploaded_file, collection: str) -> None:
         status_text.info(f"Processing: {stage}")
 
     try:
-        # Save uploaded file to temp
-        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(uploaded_file.name).suffix) as tmp:
-            tmp.write(uploaded_file.getvalue())
-            tmp_path = Path(tmp.name)
+        # Save uploaded file to a temp directory while preserving original filename.
+        # This keeps ingestion history and UI display closer to what users uploaded.
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            original_name = Path(uploaded_file.name).name
+            tmp_path = Path(tmp_dir) / original_name
+            tmp_path.write_bytes(uploaded_file.getvalue())
 
-        status_text.info("Starting ingestion pipeline...")
+            status_text.info("Starting ingestion pipeline...")
 
-        # Get pipeline
-        pipeline = _get_ingestion_pipeline(collection, on_progress)
+            # Get pipeline
+            pipeline = _get_ingestion_pipeline(on_progress)
 
-        if pipeline is None:
-            st.error("Failed to create ingestion pipeline.")
-            return
+            if pipeline is None:
+                st.error("Failed to create ingestion pipeline.")
+                return
 
-        # Run ingestion
-        result = pipeline.ingest(tmp_path)
-
-        # Clean up temp file
-        tmp_path.unlink(missing_ok=True)
+            # Run ingestion (pass collection to ingest method)
+            result = pipeline.ingest(tmp_path, collection=collection)
 
         if result.success:
             progress_bar.progress(1.0, text="Complete!")
@@ -149,7 +148,9 @@ def _render_manage_tab(data_service: DataService) -> None:
             col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
 
             with col1:
-                st.markdown(f"**{doc.source_path}**")
+                display_name = Path(doc.source_path).name if doc.source_path else "(unknown)"
+                st.markdown(f"**{display_name}**")
+                st.caption(doc.source_path)
 
             with col2:
                 st.caption(f"Collection: {doc.collection or 'default'}")
@@ -254,13 +255,11 @@ def _get_document_manager() -> Optional[DocumentManager]:
 
 
 def _get_ingestion_pipeline(
-    collection: str,
     on_progress: Callable,
 ):
     """Get ingestion pipeline with progress callback.
 
     Args:
-        collection: Collection name.
         on_progress: Progress callback function.
 
     Returns:
@@ -273,9 +272,9 @@ def _get_ingestion_pipeline(
         settings = load_settings()
 
         # Create pipeline with progress callback
+        # Note: collection is passed to ingest() method, not __init__
         pipeline = IngestionPipeline(
             settings=settings,
-            collection=collection,
             on_progress=on_progress,
         )
 

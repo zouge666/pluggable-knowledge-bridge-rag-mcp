@@ -23,6 +23,7 @@ from src.ingestion.storage.vector_upserter import VectorUpserter
 from src.ingestion.transform import ChunkRefiner, ImageCaptioner
 from src.libs.loader.file_integrity import FileIntegrityChecker, SQLiteIntegrityChecker
 from src.libs.loader.pdf_loader import PdfLoader
+from src.libs.vector_store.chroma_store import ChromaStore
 from src.libs.vector_store import BaseVectorStore
 
 
@@ -101,10 +102,13 @@ class IngestionPipeline:
         self._chunk_refiner = chunk_refiner
         self._image_captioner = image_captioner
         self._batch_processor = batch_processor
+        self._vector_store = vector_store or ChromaStore(self._settings)
+        self._vector_upserter = vector_upserter or VectorUpserter(
+            vector_store=self._vector_store,
+            collection=None,
+        )
         self._bm25_indexer = bm25_indexer
-        self._vector_upserter = vector_upserter
-        self._image_storage = image_storage
-        self._vector_store = vector_store
+        self._image_storage = image_storage or ImageStorage()
         self._on_progress = on_progress
 
     def ingest(
@@ -334,13 +338,27 @@ class IngestionPipeline:
         if not records:
             return
 
+        # Ensure collection metadata is consistently available for downstream filtering.
+        if collection:
+            for record in records:
+                record.metadata["collection"] = collection
+
         # 存储到向量数据库
-        if self._vector_upserter and self._vector_store:
-            self._vector_upserter.upsert(records, collection, trace)
+        if self._vector_upserter:
+            self._vector_upserter.upsert(records, trace)
 
         # 构建 BM25 索引
         if self._bm25_indexer:
-            self._bm25_indexer.index(records, collection, trace)
+            if hasattr(self._bm25_indexer, "index"):
+                self._bm25_indexer.index(records, collection, trace)
+            elif hasattr(self._bm25_indexer, "build"):
+                sparse_data = {
+                    record.id: (record.sparse_vector or {})
+                    for record in records
+                    if record.sparse_vector is not None
+                }
+                if sparse_data:
+                    self._bm25_indexer.build(sparse_data, trace)
 
     def _save_images(
         self,

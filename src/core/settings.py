@@ -152,6 +152,8 @@ def load_settings(path: str = "config/settings.yaml") -> Settings:
     if not config_path.exists():
         raise ConfigurationError(f"Configuration file not found: {path}")
 
+    _load_env_files(config_path)
+
     try:
         with open(config_path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
@@ -162,6 +164,37 @@ def load_settings(path: str = "config/settings.yaml") -> Settings:
     validate_settings(settings)
 
     return settings
+
+
+def _load_env_files(config_path: Path) -> None:
+    """
+    Load .env files when python-dotenv is available.
+
+    This keeps secrets out of tracked YAML while remaining backward-compatible:
+    if python-dotenv is not installed, existing shell env vars still work.
+    """
+    try:
+        from dotenv import load_dotenv  # type: ignore
+    except ImportError:
+        return
+
+    candidates = []
+    cwd_env = Path.cwd() / ".env"
+    if cwd_env.exists():
+        candidates.append(cwd_env)
+
+    # Typical project layout: config/settings.yaml -> project root/.env
+    project_env = config_path.parent.parent / ".env"
+    if project_env.exists():
+        candidates.append(project_env)
+
+    loaded = set()
+    for env_path in candidates:
+        resolved = env_path.resolve()
+        if resolved in loaded:
+            continue
+        load_dotenv(dotenv_path=resolved, override=False)
+        loaded.add(resolved)
 
 
 def _parse_settings(data: Dict[str, Any]) -> Settings:

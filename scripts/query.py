@@ -16,7 +16,7 @@ project_root = Path(__file__).parent.parent.resolve()
 sys.path.insert(0, str(project_root))
 sys.path.insert(0, str(project_root / "src"))
 
-from src.core.settings import Settings
+from src.core.settings import Settings, load_settings
 from src.core.query_engine import (
     QueryProcessor,
     DenseRetriever,
@@ -144,7 +144,7 @@ Examples:
     args = parser.parse_args()
 
     # Load settings
-    settings = Settings()
+    settings = load_settings()
 
     # Check if data is available
     if not check_data_available(settings):
@@ -172,7 +172,7 @@ Examples:
         vector_store = VectorStoreFactory.create(settings)
 
         # BM25 indexer
-        bm25_indexer = BM25Indexer(settings=settings)
+        bm25_indexer = BM25Indexer()
 
         # Query processor
         query_processor = QueryProcessor()

@@ -15,6 +15,7 @@ sys.path.insert(0, str(project_root / "src"))
 
 from core.settings import ConfigurationError, load_settings
 from observability.logger import get_logger
+from mcp_server.server import MCPServer
 
 
 def main() -> int:
@@ -34,8 +35,9 @@ def main() -> int:
         logger.error(f"Failed to load configuration: {e}")
         return 1
 
-    print("Modular RAG MCP Server - Starting...")
-    print("Project structure initialized successfully.")
+    logger.info("Starting MCP stdio server")
+    server = MCPServer(settings=settings, register_default_tools=True)
+    server.run()
     return 0
 
 

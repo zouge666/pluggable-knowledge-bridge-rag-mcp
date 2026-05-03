@@ -116,7 +116,12 @@ class DenseRetriever:
         if self._embedding_client is None:
             raise RuntimeError("Embedding client not configured")
 
-        vectors = self._embedding_client.embed([query])
+        embedding_result = self._embedding_client.embed([query])
+        if hasattr(embedding_result, "vectors"):
+            vectors = embedding_result.vectors
+        else:
+            # Backward compatibility for mock/legacy embedding clients returning List[List[float]].
+            vectors = embedding_result
         if not vectors:
             raise RuntimeError("Failed to embed query")
         return vectors[0]
