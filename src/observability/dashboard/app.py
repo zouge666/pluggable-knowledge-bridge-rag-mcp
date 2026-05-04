@@ -90,37 +90,9 @@ def main() -> None:
         initial_sidebar_state="expanded",
     )
 
-    # Define pages
-    pages = {
-        "Overview": render_overview_page,
-        "Data Browser": render_data_browser_page,
-        "Ingestion Manager": render_ingestion_manager_page,
-        "Ingestion Tracing": render_ingestion_tracing_page,
-        "Query Tracing": render_query_tracing_page,
-        "Evaluation": render_evaluation_page,
-    }
-
-    # Sidebar navigation
-    with st.sidebar:
-        st.title("📚 Knowledge Hub")
-        st.caption("RAG Management Dashboard")
-
-        st.divider()
-
-        selected_page = st.radio(
-            "Navigate",
-            list(pages.keys()),
-            label_visibility="collapsed",
-        )
-
-        st.divider()
-
-        # Show version info
-        st.caption("Version: 0.1.0")
-        st.caption("Powered by Streamlit")
-
-    # Render selected page
-    pages[selected_page]()
+    # Keep only Streamlit's built-in page navigation (top-left).
+    # The individual pages under `dashboard/pages/` are displayed by Streamlit.
+    render_overview_page()
 
 
 if __name__ == "__main__":

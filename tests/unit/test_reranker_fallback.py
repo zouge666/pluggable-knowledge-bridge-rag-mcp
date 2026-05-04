@@ -423,3 +423,97 @@ class TestEdgeCases:
         query_reranker = QueryReranker(reranker=None)
         result = query_reranker.rerank("test query", results, top_k=50)
         assert len(result.candidates) == 50
+
+
+class TestLLMToCrossEncoderFallback:
+    """Tests for llm -> cross_encoder fallback chain."""
+
+    def test_llm_failure_falls_back_to_cross_encoder(self, monkeypatch):
+        """When llm reranker fails, cross_encoder should be attempted before none."""
+        from src.core.settings import RerankSettings, Settings
+
+        primary = Mock(spec=BaseReranker)
+        primary.get_backend_name.return_value = "llm"
+        primary.is_available.return_value = True
+        primary.rerank.side_effect = RerankerError("LLM rerank failed", backend="llm")
+
+        secondary = Mock(spec=BaseReranker)
+        secondary.get_backend_name.return_value = "cross_encoder"
+        secondary.is_available.return_value = True
+        secondary.rerank.return_value = RerankResult(
+            candidates=[RerankCandidate(id="2", text="text 2", score=0.91)],
+            backend="cross_encoder",
+        )
+
+        llm_instance = Mock()
+
+        monkeypatch.setattr(
+            "src.core.query_engine.reranker.LLMFactory.create",
+            lambda *_args, **_kwargs: llm_instance,
+        )
+
+        def fake_create(_settings, llm=None):
+            assert llm is llm_instance
+            return primary
+
+        monkeypatch.setattr(
+            "src.core.query_engine.reranker.RerankerFactory.create",
+            fake_create,
+        )
+        monkeypatch.setattr(
+            "src.core.query_engine.reranker.RerankerFactory.create_from_settings",
+            lambda *_args, **_kwargs: secondary,
+        )
+
+        settings = Settings(rerank=RerankSettings(enabled=True, provider="llm", model="", top_k=5))
+        query_reranker = QueryReranker(settings=settings)
+        results = [
+            RetrievalResult(chunk_id="1", score=0.9, text="text 1"),
+            RetrievalResult(chunk_id="2", score=0.8, text="text 2"),
+        ]
+
+        result = query_reranker.rerank("test query", results, top_k=1)
+
+        assert result.backend == "cross_encoder"
+        assert result.fallback_used is True
+        assert "switched to cross_encoder" in (result.fallback_reason or "").lower()
+        assert primary.rerank.called
+        assert secondary.rerank.called
+
+    def test_llm_and_cross_encoder_both_unavailable_fall_back_to_none(self, monkeypatch):
+        """If both llm and cross_encoder are unavailable, fallback to none."""
+        from src.core.settings import RerankSettings, Settings
+
+        primary = Mock(spec=BaseReranker)
+        primary.get_backend_name.return_value = "llm"
+        primary.is_available.return_value = False
+
+        secondary = Mock(spec=BaseReranker)
+        secondary.get_backend_name.return_value = "cross_encoder"
+        secondary.is_available.return_value = False
+
+        monkeypatch.setattr(
+            "src.core.query_engine.reranker.LLMFactory.create",
+            lambda *_args, **_kwargs: Mock(),
+        )
+        monkeypatch.setattr(
+            "src.core.query_engine.reranker.RerankerFactory.create",
+            lambda *_args, **_kwargs: primary,
+        )
+        monkeypatch.setattr(
+            "src.core.query_engine.reranker.RerankerFactory.create_from_settings",
+            lambda *_args, **_kwargs: secondary,
+        )
+
+        settings = Settings(rerank=RerankSettings(enabled=True, provider="llm", model="", top_k=5))
+        query_reranker = QueryReranker(settings=settings)
+        results = [
+            RetrievalResult(chunk_id="1", score=0.9, text="text 1"),
+            RetrievalResult(chunk_id="2", score=0.8, text="text 2"),
+        ]
+
+        result = query_reranker.rerank("test query", results, top_k=1)
+
+        assert result.backend == "none"
+        assert result.fallback_used is True
+        assert "not available" in (result.fallback_reason or "").lower()
